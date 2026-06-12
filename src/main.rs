@@ -159,20 +159,24 @@ fn handle_card_readout(p: &[u8]) {
         );
     }
 
-    // Owner data: 1 byte charset + NUL-terminated string (field separator = ';')
-    // Field order for SI-Card8/9: first_name ; last_name
+    // Owner data: 1 byte charset + NUL-terminated semicolon-delimited fields.
+    // Only present when a NUL terminator is found — no NUL means the area is
+    // uninitialised garbage (card never had owner data written).
+    // Field order (device sends full layout regardless of card family):
+    //   first_name ; last_name ; sex ; year_of_birth ; club ; ...
     if p.len() > punches_end + 1 {
         let _charset   = p[punches_end]; // 1 = ISO-8859-1, 17 = GB2312
         let name_bytes = &p[punches_end + 1..];
-        let nul        = name_bytes.iter().position(|&b| b == 0).unwrap_or(name_bytes.len());
-        if nul > 0 {
-            let s = String::from_utf8_lossy(&name_bytes[..nul]);
-            let parts: Vec<&str> = s.splitn(3, ';').collect();
-            let first = parts.first().copied().unwrap_or("").trim();
-            let last  = parts.get(1).copied().unwrap_or("").trim();
-            if !first.is_empty() || !last.is_empty() {
-                println!("───────────────────────────────────────────────");
-                println!(" Owner: {} {}", first, last);
+        if let Some(nul) = name_bytes.iter().position(|&b| b == 0) {
+            if nul > 0 {
+                let s = String::from_utf8_lossy(&name_bytes[..nul]);
+                let mut parts = s.split(';');
+                let first = parts.next().unwrap_or("").trim();
+                let last  = parts.next().unwrap_or("").trim();
+                if !first.is_empty() || !last.is_empty() {
+                    println!("───────────────────────────────────────────────");
+                    println!(" Owner: {} {}", first, last);
+                }
             }
         }
     }
